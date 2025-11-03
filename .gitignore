@@ -2,10 +2,3 @@
 secret_config.js
 private/
 .env     
- teacherImages: [
-        "./images/0abb95f22ca0a0fef9b1.jpg",
-        "./images/53cb76bcf0ee7cb025ff.jpg",
-        "./images/67fb6f3dd66f5a31037e.jpg",
-        "./images/73435048d61a5a44030b.jpg",
-        "./images/d5217d7dfb2f77712e3e.jpg"
-    ],
