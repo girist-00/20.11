@@ -1,11 +1,12 @@
-
 const CONFIG = {
-  messageCount: 75,
-  iconCount: 20,
-  starCount: 1000,
+  layers: 3,
+  messageCount: 50,
+  iconCount: 50,
+  starCount: 3000,
   teacherImageCount: 8,
-  areaSize: 150,
-  fallSpeed: 0.8,
+  areaSize: 700,
+  fallSpeed: 0.5,
+  objectDistance: 300,
   teacherImages: [
     "./images/0abb95f22ca0a0fef9b1.jpg",
     "./images/53cb76bcf0ee7cb025ff.jpg",
@@ -36,8 +37,9 @@ const CONFIG = {
 };
 
 let scene, camera, renderer, controls;
-const wishes = [], fallingIcons = [], teacherPhotos = [], shootingStars = [];
-let stars;
+const layers = [];
+let stars, initialCameraMatrix;
+const shootingStars = [];
 
 init();
 animate();
@@ -48,58 +50,68 @@ function init() {
   scene = new THREE.Scene();
 
   camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 3000);
-  camera.position.set(0, 0, 0);
-  camera.lookAt(0, 0, -1);
+  camera.position.set(0, 0, 100);
+  camera.lookAt(0, 0, 0);
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(innerWidth, innerHeight);
   renderer.setPixelRatio(window.devicePixelRatio);
   document.body.appendChild(renderer.domElement);
 
-  // Giữ camera cố định (chỉ zoom)
   controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.enableRotate = false;
-  controls.enablePan = false;
-  controls.minDistance = 100;
-  controls.maxDistance = 1000;
-  controls.update();
+  controls.enableDamping = true;
+  controls.autoRotate = false;
 
-  // Ánh sáng nhẹ
   const ambient = new THREE.AmbientLight(0xffffff, 3.5);
   scene.add(ambient);
-
   const pointLight = new THREE.PointLight(0xffb3ff, 3.5, 2000);
   pointLight.position.set(0, 300, 400);
   scene.add(pointLight);
 
+  initialCameraMatrix = camera.matrixWorld.clone();
+
   createStars();
-  createWishes();
-  createIcons();
-  createTeacherPhotos(CONFIG.teacherImages);
+
+  for (let i = 0; i < CONFIG.layers; i++) {
+    const layerGroup = new THREE.Group();
+    layerGroup.userData.depth = CONFIG.objectDistance + i * 150;
+    layers.push(layerGroup);
+    scene.add(layerGroup);
+
+    createWishes(layerGroup);
+    createIcons(layerGroup);
+    createTeacherPhotos(CONFIG.teacherImages, layerGroup);
+  }
 
   window.addEventListener("resize", onWindowResize);
 
   const btn = document.getElementById("music-control");
   const audio = document.getElementById("bg-music");
   let playing = false;
-  btn?.addEventListener("click", () => {
-    if (!playing) {
-      audio.play();
-      btn.textContent = "🔈";
-    } else {
-      audio.pause();
-      btn.textContent = "🔊";
-    }
-    playing = !playing;
-  });
+  if (btn && audio) {
+    btn.addEventListener("click", () => {
+      if (!playing) {
+        audio.play();
+        btn.textContent = "🔊";
+      } else {
+        audio.pause();
+        btn.textContent = "🔈";
+      }
+      playing = !playing;
+    });
+  }
 }
 
 function getRandomWarmColor() {
-  const hue = 0 + Math.random() * 25;
-  const altHue = Math.random() < 0.4 ? 320 + Math.random() * 20 : hue;
-  const sat = 70 + Math.random() * 30;
-  const light = 55 + Math.random() * 15;
-  return `hsl(${altHue}, ${sat}%, ${light}%)`;
+  // Hue mở rộng: từ đỏ (0°) → cam (40°) → hồng (350°)
+  const hue = Math.random() < 0.5
+    ? 0 + Math.random() * 40     // đỏ → cam
+    : 330 + Math.random() * 30;  // hồng → đỏ tím
+  
+  const sat = 85 + Math.random() * 15;  // độ bão hòa cao (85–100%)
+  const light = 50 + Math.random() * 15; // sáng vừa phải, không cháy
+  
+  return `hsl(${hue % 360}, ${sat}%, ${light}%)`;
 }
 
 function createStars() {
@@ -107,9 +119,9 @@ function createStars() {
   const vertices = [];
   for (let i = 0; i < CONFIG.starCount; i++) {
     vertices.push(
-      (Math.random() - 0.5) * 4000,
-      (Math.random() - 0.5) * 4000,
-      (Math.random() - 0.5) * 4000
+      (Math.random() - 0.5) * 6000,
+      (Math.random() - 0.5) * 6000,
+      (Math.random() - 0.5) * 6000
     );
   }
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
@@ -123,12 +135,13 @@ function createStars() {
   scene.add(stars);
 }
 
-// 🎨 Tạo Plane thay cho Sprite (để không xoay theo camera)
-function createTextPlane(message, isIcon = false) {
+function createTextSprite(message, isIcon = false) {
   const testCanvas = document.createElement("canvas");
   const testCtx = testCanvas.getContext("2d");
   const fontSize = isIcon ? 160 : 140;
-  testCtx.font = isIcon ? `bold ${fontSize}px 'Segoe UI Emoji'` : `900 ${fontSize}px 'Poppins'`;
+testCtx.font = isIcon
+  ? `bold ${fontSize}px 'Segoe UI Emoji'`
+  : `700 ${fontSize}px 'Be Vietnam Pro', sans-serif`;
   const textWidth = testCtx.measureText(message).width;
   const padding = 300;
   const canvasWidth = Math.min(4096, textWidth + padding);
@@ -140,73 +153,81 @@ function createTextPlane(message, isIcon = false) {
   const ctx = canvas.getContext("2d");
 
   const fillColor = getRandomWarmColor();
-
-  ctx.shadowColor = "rgba(255, 255, 255, 0.5)";
+  ctx.shadowColor = "rgba(255, 255, 255, 0.37)";
   ctx.shadowBlur = 20;
   ctx.font = testCtx.font;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.lineWidth = 6;
-  ctx.strokeStyle = "rgba(255,255,255,0.9)";
+  ctx.strokeStyle = "rgba(255,255,255,0.3)";
   ctx.strokeText(message, canvasWidth / 2, canvasHeight / 2);
   ctx.fillStyle = fillColor;
   ctx.fillText(message, canvasWidth / 2, canvasHeight / 2);
 
   const texture = new THREE.CanvasTexture(canvas);
-  const geometry = new THREE.PlaneGeometry(isIcon ? 45 : Math.min(320, textWidth / 8), isIcon ? 45 : 70);
-  const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide });
-  const mesh = new THREE.Mesh(geometry, material);
-
-  // Giữ hướng cố định
-  mesh.rotation.set(0, 0, 0);
-  return mesh;
+  const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+  const sprite = new THREE.Sprite(material);
+  const scaleX = isIcon ? 45 : Math.min(320, textWidth / 8);
+  const scaleY = isIcon ? 45 : 70;
+  sprite.scale.set(scaleX, scaleY, 1);
+  return sprite;
 }
 
-// 🎁 Chỉ rơi trong vùng phía trước camera (cố định hướng)
-function createWishes() {
-  for (let i = 0; i < CONFIG.messageCount; i++) {
+function createWishes(group) {
+  const DISTANCE = group.userData.depth;
+  for (let i = 0; i < CONFIG.messageCount / CONFIG.layers; i++) {
     const text = CONFIG.messages[Math.floor(Math.random() * CONFIG.messages.length)];
-    const plane = createTextPlane(text);
-    plane.position.set(
-      (Math.random() - 0.5) * CONFIG.areaSize * 2,
-      Math.random() * CONFIG.areaSize,
-      -500 - Math.random() * 300
+    const sprite = createTextSprite(text);
+    const localPos = new THREE.Vector3(
+      (Math.random() - 0.5) * CONFIG.areaSize,
+      (Math.random() - 0.5) * CONFIG.areaSize,
+      -DISTANCE
     );
-    scene.add(plane);
-    wishes.push(plane);
+    const worldPos = localPos.clone().applyMatrix4(initialCameraMatrix);
+    sprite.position.copy(worldPos);
+    group.add(sprite);
   }
 }
 
-function createIcons() {
-  for (let i = 0; i < CONFIG.iconCount; i++) {
+function createIcons(group) {
+  const DISTANCE = group.userData.depth;
+  for (let i = 0; i < CONFIG.iconCount / CONFIG.layers; i++) {
     const icon = CONFIG.icons[Math.floor(Math.random() * CONFIG.icons.length)];
-    const plane = createTextPlane(icon, true);
-    plane.position.set(
-      (Math.random() - 0.5) * CONFIG.areaSize * 2,
-      Math.random() * CONFIG.areaSize,
-      -500 - Math.random() * 300
+    const sprite = createTextSprite(icon, true);
+    const localPos = new THREE.Vector3(
+      (Math.random() - 0.5) * CONFIG.areaSize,
+      (Math.random() - 0.5) * CONFIG.areaSize,
+      -DISTANCE
     );
-    scene.add(plane);
-    fallingIcons.push(plane);
+    const worldPos = localPos.clone().applyMatrix4(initialCameraMatrix);
+    sprite.position.copy(worldPos);
+    group.add(sprite);
   }
 }
 
-function createTeacherPhotos(urls) {
+function createTeacherPhotos(urls, group) {
   const loader = new THREE.TextureLoader();
-  for (let i = 0; i < CONFIG.teacherImageCount; i++) {
+  const DISTANCE = group.userData.depth + 50;
+  for (let i = 0; i < CONFIG.teacherImageCount / CONFIG.layers; i++) {
     const url = urls[Math.floor(Math.random() * urls.length)];
     loader.load(url, (texture) => {
-      const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
-      const scale = 200 + Math.random() * 100;
-      const photo = new THREE.Mesh(new THREE.PlaneGeometry(scale, scale), mat);
-      photo.position.set(
-        (Math.random() - 0.5) * CONFIG.areaSize * 2,
-        Math.random() * CONFIG.areaSize,
-        -600 - Math.random() * 400
+      const mat = new THREE.SpriteMaterial({
+        map: texture,
+        transparent: true,
+        opacity: 0.9
+      });
+      const photo = new THREE.Sprite(mat);
+      const scale = 100 + Math.random() * 60; // ⬅️ giảm kích thước hình
+      photo.scale.set(scale, scale, 1);
+
+      const localPos = new THREE.Vector3(
+        (Math.random() - 0.5) * CONFIG.areaSize,
+        (Math.random() - 0.5) * CONFIG.areaSize,
+        -DISTANCE
       );
-      photo.rotation.set(0, 0, 0);
-      scene.add(photo);
-      teacherPhotos.push(photo);
+      const worldPos = localPos.clone().applyMatrix4(initialCameraMatrix);
+      photo.position.copy(worldPos);
+      group.add(photo);
     });
   }
 }
@@ -224,7 +245,7 @@ function createShootingStars() {
 }
 
 function resetShootingStar(line) {
-  line.position.set((Math.random() - 0.5) * 1000, 500 + Math.random() * 300, -400);
+  line.position.set((Math.random() - 0.5) * 2000, 500 + Math.random() * 500, (Math.random() - 0.5) * 800);
   line.userData.vx = -10 - Math.random() * 15;
   line.userData.vy = -8 - Math.random() * 10;
   line.material.opacity = 0.8;
@@ -245,13 +266,15 @@ function animate() {
   stars.rotation.y += 0.00025;
   stars.rotation.x += 0.00025;
 
-  [...wishes, ...fallingIcons, ...teacherPhotos].forEach((obj) => {
-    obj.position.y -= CONFIG.fallSpeed;
-    if (obj.position.y < -CONFIG.areaSize / 2) {
-      obj.position.y = CONFIG.areaSize / 2;
-      obj.position.x = (Math.random() - 0.5) * CONFIG.areaSize * 2;
-    }
-  });
+  for (const group of layers) {
+    const speed = CONFIG.fallSpeed * (1 + group.userData.depth / 1000);
+    group.children.forEach((obj) => {
+      obj.position.y -= speed;
+      if (obj.position.y < -CONFIG.areaSize / 2) {
+        obj.position.y = CONFIG.areaSize / 2;
+      }
+    });
+  }
 
   updateShootingStars();
   renderer.render(scene, camera);
