@@ -46,19 +46,28 @@ function init() {
   document.getElementById("loading").remove();
   scene = new THREE.Scene();
 
+  // 🎥 Giữ camera tại gốc và chỉ xoay/zoom
   camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 3000);
-  camera.position.set(0, 250, 500);
+  camera.position.set(0, 0, 0);
+  camera.lookAt(0, 0, -1);
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(innerWidth, innerHeight);
   renderer.setPixelRatio(window.devicePixelRatio);
   document.body.appendChild(renderer.domElement);
 
+  // 🎮 Controls chỉ xoay và zoom quanh chính camera
   controls = new THREE.OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
+  controls.enablePan = false;       // ❌ không cho kéo ngang
+  controls.minDistance = 100;       // zoom in tối thiểu
+  controls.maxDistance = 1000;      // zoom out tối đa
+  controls.target.set(0, 0, -1);    // nhìn ra phía trước
   controls.autoRotate = true;
   controls.autoRotateSpeed = 0.04;
+  controls.update();
 
+  // 💡 Ánh sáng
   const ambient = new THREE.AmbientLight(0xffffff, 3.5);
   scene.add(ambient);
 
@@ -160,9 +169,9 @@ function createWishes() {
     const text = CONFIG.messages[Math.floor(Math.random() * CONFIG.messages.length)];
     const sprite = createTextSprite(text);
     sprite.position.set(
-      (Math.random() - 0.5) * CONFIG.areaSize * 3,
+      (Math.random() - 0.5) * CONFIG.areaSize * 2,
       Math.random() * CONFIG.areaSize,
-      (Math.random() - 0.5) * CONFIG.areaSize * 3
+      -400 + Math.random() * 200
     );
     scene.add(sprite);
     wishes.push(sprite);
